@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"C:/Users/jamic/收入/Revenue_Strategic_OS_V9_0_Ultimate.html\":*)",
+      "Bash(python3:*)",
+      "Bash(python:*)"
+    ]
+  }
+}

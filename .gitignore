@@ -1,0 +1,16 @@
+# 大型二進位檔案（不納入版本控制）
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.xlsx
+*.xlsm
+*.docx
+
+# 暫存檔
+temp_*
+*.tmp
+
+# 系統檔
+.DS_Store
+Thumbs.db
