@@ -6221,7 +6221,7 @@
         panel.classList.add('open');
         if (toggle) toggle.style.right = '440px';
         document.body.classList.add('ai-open');
-        document.querySelector('.app-container').style.marginRight = '440px';
+        const _app = document.querySelector('.app-container'); if (_app) _app.style.marginRight = '440px';
         updateAIContextLabel();
         initAIProviderUI();
       }
