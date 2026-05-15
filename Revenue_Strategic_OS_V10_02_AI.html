@@ -1938,6 +1938,61 @@
       animation: ai-dots 1.2s steps(4, end) infinite;
     }
 
+    /* ─── Quick Reply 智能追問 chips ─── */
+    .ai-quick-replies {
+      padding: 6px 14px 10px;
+      animation: ai-qr-in 0.22s ease;
+    }
+
+    @keyframes ai-qr-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .ai-qr-label {
+      font-size: 0.6rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+    }
+
+    .ai-qr-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .ai-qr-chip {
+      background: rgba(168, 85, 247, 0.07);
+      border: 1px solid rgba(168, 85, 247, 0.32);
+      color: var(--accent-purple);
+      border-radius: 20px;
+      padding: 5px 13px;
+      font-size: 0.69rem;
+      cursor: pointer;
+      transition: background 0.16s, border-color 0.16s, transform 0.14s, box-shadow 0.16s;
+      text-align: left;
+      line-height: 1.4;
+      max-width: 100%;
+    }
+
+    .ai-qr-chip:hover {
+      background: rgba(168, 85, 247, 0.18);
+      border-color: var(--accent-purple);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 10px rgba(168, 85, 247, 0.2);
+    }
+
+    .ai-qr-chip:active {
+      transform: scale(0.97);
+    }
+
+    [data-theme="light"] .ai-qr-chip {
+      background: rgba(168, 85, 247, 0.06);
+    }
+
     .ai-input-section {
       flex: 0 0 auto;
       padding: 12px 14px;
@@ -6636,6 +6691,8 @@
           aiState.chatHistory.push({ role: 'assistant', content: fullText });
           trimChatHistory();
           saveAIChatCache();
+          // 每次 AI 回應完成後，動態產生追問 chips
+          showQuickReplies(fullText, aiState.currentTabId);
         }
         setAIStatus('ready');
         return fullText;
@@ -6833,10 +6890,187 @@
     }
 
     function clearAIChat() {
+      clearQuickReplies();
       const container = document.getElementById('ai-messages');
       if (!container) return;
       aiState.chatHistory = [];
       container.innerHTML = '<div class="ai-welcome"><div class="ai-welcome-icon">🤖</div><p>對話已清除。請繼續提問或點擊頁籤的 <strong style="color:var(--accent-purple)">🤖 AI 分析</strong> 按鈕。</p></div>';
+    }
+
+    // ══ Quick Reply 智能追問 ══
+
+    /* 每個 tab 6 個候選；_generic 5 個通用；評分後取 top-3 tab + 1 generic */
+    const _QR_BANKS = {
+      'tab-summary': [
+        '哪個月份的營收異動最值得深究？原因為何？',
+        '淨利潤率 4.97%，同業基準大概落在哪個區間？',
+        'YoY +140% 的高成長，主要下行風險在哪裡？',
+        '要把淨利潤率提升到 7%，最快的槓桿點是什麼？',
+        '客戶數成長與營收成長是否同步？',
+        '現金流與帳面利潤的差距，說明了什麼問題？',
+      ],
+      'tab-product': [
+        '哪些品類是隱藏的利潤殺手？',
+        '前 20% 品項的毛利貢獻集中在哪個區間？',
+        '建議刪除哪些長尾品類來拉高整體毛利率？',
+        '哪個品類最適合做交叉銷售捆綁？',
+        '成長率高但毛利低的品類，應該如何取捨？',
+        '哪個品類的季節性最強，備貨策略建議為何？',
+      ],
+      'tab-basket': [
+        '支持度最高的商品組合，如何設計促銷活動？',
+        '提升度（Lift）最高的組合代表什麼商機？',
+        '這些規則如何應用到購物車推薦或首頁排版？',
+        '有沒有負相關組合應該避免一起推薦？',
+        '關聯規則的信賴度門檻設定是否合理？',
+        '把支持度閾值調低，會帶出哪些隱藏規律？',
+      ],
+      'tab-rfm': [
+        '流失風險客群喚回的 ROI 大概多少？',
+        '冠軍客戶佔比是否達到健康水位（建議 ≥15%）？',
+        '如何為各 RFM 區塊設計自動化行銷觸發點？',
+        '潛力新客如何加速升級到活躍或冠軍層？',
+        '如何防止休眠客戶持續滑入流失區？',
+        '哪個 RFM 區塊的 ARPU 最高，投入產出比最好？',
+      ],
+      'tab-region': [
+        '最弱的區域是資源不足還是市場天花板偏低？',
+        '哪個區域的客單價最高，意味著什麼機會？',
+        '各區域的獲客成本是否存在明顯差異？',
+        '下季應優先把資源押注在哪個區域？理由為何？',
+        '哪個區域最適合做新品類或新模式試點？',
+        '各區域是否存在明顯的規模效益差異？',
+      ],
+      'tab-lifecycle': [
+        '移動平均線顯示趨勢是加速成長還是趨緩放緩？',
+        '哪個月份的衰退幅度最需要追究原因？',
+        '季節性波動有跨年度的固定規律嗎？',
+        '如何在淡季設計干預措施來平滑營收波動？',
+        '同比與環比趨勢是否發出矛盾訊號？',
+        '生命週期目前處於哪個階段，下一步怎麼走？',
+      ],
+      'tab-forecast': [
+        '預測誤差最大的月份，背後發生了什麼事件？',
+        '預測偏差有系統性方向嗎（持續偏高或偏低）？',
+        '下季預測的主要上行與下行風險各是什麼？',
+        '如何把 MAPE 壓低到 10% 以內？',
+        '預算與預測差距最大的品類或區域在哪？',
+        '是否已納入季節性調整和異常事件修正？',
+      ],
+      'tab-cost': [
+        '哪個費用項目成長速度超越了營收成長？',
+        'COGS 率與同業基準相比如何？',
+        '銷管費用的固定 / 變動比例是否合理？',
+        '費用優化的快贏機會在哪裡？',
+        '如果要把費用率壓低 2pp，優先從哪裡下手？',
+        '哪項費用的邊際效益最低，可以優先縮減？',
+      ],
+      'tab-inventory': [
+        '哪些 SKU 的周轉率低於安全水位？',
+        'C 類品項的滯銷率與庫存積壓量如何？',
+        '缺貨風險最高的 SKU 是否已有備貨計劃？',
+        '安全庫存水位如何優化，兼顧填充率與資金成本？',
+        '各供應商交期穩定性對庫存影響最大的是哪家？',
+        '庫存周轉天數（DOS）的行業基準是多少？',
+      ],
+      'tab-cohort': [
+        '留存斷崖期通常在第幾個月出現？',
+        '哪一個世代的留存曲線最健康，關鍵差異是什麼？',
+        '如何針對 M3 留存斷崖期設計干預措施？',
+        '不同獲客渠道的世代留存率有明顯差異嗎？',
+        '高留存與低留存世代，獲客方式有何不同？',
+        '世代分析是否揭示了產品體驗改善的時間節點？',
+      ],
+      'tab-finance': [
+        '利潤瀑布中哪個環節的損耗最嚴重？',
+        '資本結構的最優化方向是什麼？',
+        '毛利率提升的最大阻力在哪裡？',
+        '財務 BP 的關鍵假設是否需要更新？',
+        '如何用財務數據說服董事會支持投資計劃？',
+        '息稅前利潤（EBIT）的目標達成率如何？',
+      ],
+      'tab-dax': [
+        '這個 DAX 公式如何整合到 Power BI 報表中？',
+        '有沒有更簡潔的寫法達到同樣效果？',
+        '如何加入動態時間篩選（SAMEPERIODLASTYEAR）？',
+        '這個度量值在 DirectQuery 模式下有什麼限制？',
+        '如何用 DAX 計算滾動 12 個月移動平均？',
+        '計算效能如何優化？有沒有 CALCULATE 過度嵌套問題？',
+      ],
+      '_generic': [
+        '有什麼具體可執行的下一步行動建議？',
+        '最需要優先關注的三個風險是什麼？',
+        '如果只能做一件事，你建議優先做哪件？',
+        '能用一句話總結最重要的結論嗎？',
+        '這個分析有哪些關鍵假設需要確認？',
+      ]
+    };
+
+    /* 評分：從 AI 回應文字中取出 2-4 字中文詞，計算與候選問題的重疊數
+       → 讓 chip 內容盡量貼合當次回覆的主題 */
+    function _scoreQR(question, responseText) {
+      const words = question.match(/[一-鿿]{2,4}/g) || [];
+      return words.filter(w => responseText.includes(w)).length;
+    }
+
+    function _pickQuickReplies(responseText, tabId) {
+      const bank = (_QR_BANKS[tabId] || []).slice();
+      const generic = _QR_BANKS['_generic'].slice();
+
+      // 評分排序，相同分數時隨機洗牌避免每次重複
+      const scored = bank.map(q => ({ q, s: _scoreQR(q, responseText) }));
+      scored.sort((a, b) => b.s - a.s || (Math.random() - 0.5));
+      const picked = scored.slice(0, 3).map(x => x.q);
+
+      // 通用追問：隨機取 1 個
+      const gPick = generic[Math.floor(Math.random() * generic.length)];
+      return [...picked, gPick];
+    }
+
+    /* 渲染 chips（插在 #ai-messages 底部） */
+    function showQuickReplies(responseText, tabId) {
+      clearQuickReplies();
+      const container = document.getElementById('ai-messages');
+      if (!container || !tabId) return;
+
+      const questions = _pickQuickReplies(responseText, tabId);
+      if (!questions.length) return;
+
+      const wrap = document.createElement('div');
+      wrap.className = 'ai-quick-replies';
+      wrap.id = 'ai-quick-replies';
+
+      const label = document.createElement('div');
+      label.className = 'ai-qr-label';
+      label.textContent = '💡 智能追問';
+      wrap.appendChild(label);
+
+      const row = document.createElement('div');
+      row.className = 'ai-qr-chips';
+      questions.forEach(q => {
+        const btn = document.createElement('button');
+        btn.className = 'ai-qr-chip';
+        btn.textContent = q;
+        btn.onclick = () => sendQuickReply(q);
+        row.appendChild(btn);
+      });
+      wrap.appendChild(row);
+      container.appendChild(wrap);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    /* 清除所有現有 chips */
+    function clearQuickReplies() {
+      const el = document.getElementById('ai-quick-replies');
+      if (el) el.remove();
+    }
+
+    /* 點擊 chip → 填入輸入框 → 直接發送 */
+    function sendQuickReply(question) {
+      clearQuickReplies();
+      const input = document.getElementById('ai-input');
+      if (input) input.value = question;
+      sendAIMessage();
     }
 
     function copyAIMsg(btn) {
@@ -6860,6 +7094,7 @@
       const text = input.value.trim();
       if (!text) return;
       input.value = '';
+      clearQuickReplies();   // 新訊息發出，清除上一輪的 chips
       sendBtn.disabled = true;
       sendBtn.textContent = '⏹ 停止';
       appendAIMessage(text, 'user', false);
